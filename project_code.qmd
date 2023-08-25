@@ -1,0 +1,199 @@
+---
+title: "Bring the Heat: Exploring the Relationship between Temperature and Short & Long Distance Running Performance"
+format: pdf
+author: "Ro Huang"
+geometry: margin=1in
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(message = F, warning = F)
+```
+
+# Methodological Summary
+
+This project aims to address the question: **To what extent does the relationship between air temperature and running performance depend on race length for elite runners?**
+
+To explore this question, we use a dataset provided by Konstantinos Mantzios, Leonidas G. Ioannou, Andreas Flouris that details the finishing times and weather conditions during some of the world's largest running events from 1952-2019. Our analysis centers on data from 5ks and marathons.
+
+To fairly analyze running performance across both 5k and marathon times, we established a metric termed 'world record deviation'. This is quantified as the difference between the first place time and the world record time, divided by the world record time (in minutes):
+
+$$\text{world record deviation} = \frac{\text{world record time - first place time}}{\text{world record time}}$$
+
+We designed 'world record deviation' such that an increase in this metric corresponds to enhancements in running performance, while a decrease corresponds to deteriorations in running performance. Employing this as our outcome variable, we fit a multiple linear regression model with an interaction term between air temperature and race type. Additionally, our model controlled for air temperature, wind speed, relative humidity, year, sex, race type, and competition.
+
+We excluded race results that lacked first-place time data or failed to differentiate results based on gender. To test whether there was sufficient statistical evidence against the null hypothesis that regression slopes equaled 0, we used a t-test with 202 degrees of freedom set at a significance level of $\alpha = 0.05$.
+
+# Data Cleaning
+
+```{r packages}
+#Loading in necessary packages
+library(tidyverse)
+library(tidymodels)
+library(scales)
+library(jpeg)
+library(leaps)
+library(MASS)
+library(glmnet)
+library(caret)
+library(naniar)
+library(UpSetR)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(gridExtra)
+library(grid)
+library(knitr)
+library(cowplot)
+```
+
+```{r read-clean-data}
+#READ IN DATASET
+running_og <- read.csv("dataset.csv")
+
+#BASIC DATA CLEANING
+running_mod <- replace(running_og, running_og == "", NA) %>% 
+  
+  #Keep only 5K and marathon times 
+  filter(race_type == "Marathon" | race_type == "5k") %>% #Removes 299 observations
+  
+  #Putting hour marks on 5k times
+  mutate(first_place = case_when(
+    str_count(first_place, ":") ==1 ~ paste0("00:", first_place), 
+    TRUE ~ first_place)) %>% 
+    
+  #Changing strings to date-time variables
+  mutate(first_place = as.POSIXct(first_place, format = "%H:%M:%OS"),
+         world_record = as.POSIXct(world_record, format = "%H:%M:%OS"))
+
+#MANUALLY FIXING OUTLIER
+running_mod[178, "first_place"] <- as.POSIXct("2:30:05", format = "%H:%M:%OS")
+```
+
+```{r methodology}
+#EXCLUSION & VARIABLE CREATION
+running <- running_mod %>% 
+  
+  filter(!is.na(first_place)) %>% #Removes 31 observations
+  
+  filter(sex != "Both") %>% #Removes 714 observations
+  
+  #Convert to minutes
+  mutate(first_place_min = as.numeric(difftime(first_place, 
+                  as.POSIXct('00:00:00',format = '%H:%M:%OS'), units = 'min')),
+         world_record_min = as.numeric(difftime(world_record, 
+                  as.POSIXct('00:00:00', format = '%H:%M:%OS'), units = 'min'))) %>% 
+  
+  #Creating 'world record deviation' variable
+  mutate(world_first = as.numeric(world_record_min) - as.numeric(first_place_min),
+         world_first_pct = world_first/world_record_min)
+```
+
+# Descriptive Analysis
+
+```{r basic-statistics}
+stat_race_temp <- running %>% 
+  group_by(race_type) %>% 
+  summarize(count = n())
+
+stat_temp <- running %>% 
+  summarize(average = round(mean(air_temp), 1),
+            median = round(median(air_temp),1),
+            max = round(max(air_temp),1),
+            min = round(min(air_temp),1))
+
+kable(stat_race_temp)
+kable(stat_temp)
+```
+
+```{r visualization}
+#VISUALIZE FINISH TIME WITH TEMP BY RACE TYPE
+#Since faceting uses the same scale (inoptimal to visualize and compare marathon/5k),
+#use cowplot package to combine
+
+#Marathon Plot
+plot_airtemp_marathon<- running %>% 
+  filter(race_type == "Marathon") %>% 
+  ggplot(aes(x = air_temp, y = first_place_min, color = sex)) +
+  geom_point(alpha = 0.75)+ geom_smooth(method = "lm", se = FALSE)+
+  scale_color_manual(values = c("blue","red"))+
+  xlim(5, 35)+
+  labs(title = "Relationships between Temperature and First Place Finishing Times",
+       subtitle = "Marathon", 
+       x = "Air Temperature (°C)", 
+       y = "First Place Time", 
+       color = "Sex")+
+  theme_bw() + theme(legend.position = "none")
+
+#5k Plot
+plot_airtemp_5k<-running %>% 
+  filter(race_type == "5k") %>% 
+  ggplot(aes(x = air_temp, y = first_place_min, color = sex)) +
+  geom_point(alpha = 0.75) + geom_smooth(method = "lm", se = FALSE)+
+  scale_color_manual(values = c("blue","red"))+
+  xlim(5, 35)+
+  labs(subtitle = "5K",
+       x = "Air Temperature (°C)", 
+       y = "First Place Time", 
+       color = "Sex")+
+  theme_bw() + theme(legend.position = "bottom")
+
+#Combining Marathon and 5k Plot
+plot_grid(plot_airtemp_marathon, plot_airtemp_5k, align = "v", nrow = 2, rel_heights = c(10/21, 11/21))
+
+#VISUALIZE WORLD RECORD DEVIATION DISTRIBUTION
+running %>% 
+  ggplot(aes(x = race_type, y = world_first_pct, fill = race_type)) +
+  geom_violin()+
+  theme_bw() + 
+  coord_flip()+
+  facet_wrap(~sex)+
+  theme(legend.position = "none")+
+  labs(subtitle = "\'World Record Deviation\' Variable Distribution by Race Type",
+  x = "Race Type", y = "First Place Percentage of World Record")
+```
+
+# Model
+
+```{r primary-model}
+model <- lm(world_first_pct ~ air_temp + race_type 
+                         + air_temp*race_type + competition
+                         + relative_humidity + adj_wind_speed 
+                         + sex + year, data = running)
+
+tidy(model)
+```
+
+# Diagnostics
+
+```{r diagnostics}
+aug_model <- augment(model)
+residual<- ggplot(aug_model, aes(x = .fitted, y = .resid)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "darkred") + 
+  labs(x = "Fitted (predicted) value", y = "Residual",
+       subtitle = "Residual Plot") + 
+  theme_bw()
+
+qq <- ggplot(model, aes(sample = .resid)) +
+  stat_qq() + 
+  stat_qq_line() + 
+  theme_bw() + 
+  labs(x = "Theoretical quantiles", 
+       y = "Sample quantiles",
+       subtitle = "Q-Q Plot")
+
+grid.arrange(residual, qq, ncol=2, 
+top = textGrob("Linear Model Assumptions for Primary Model Satisfied",
+               gp=gpar(fontsize=11,font=1)))
+```
+
+**Independence: satisfied** We believe that independence in this dataset is reasonable, as we do believe that the observations are largely independent form one another. However, see the limitations section for potential violations of this assumption.
+
+**Linearity: satisfied** In our residual plot, we see symmetrically distributed observations around the horizontal axis in our residual plot, and thus find that this regression model is linear in the parameters.
+
+**Constant Variance: satisfied** To satisfy the constant variance condition, we expect to see "evenly-spaced" dots along the y-axis in our residual plot. We do see a clump around fitted values -0.025 and a slight fan out shape. However, the plot is relatively consistent otherwise. Thus, we find that the variance of the errors is constant.
+
+**Normality: satisfied** We see minimal deviation in our qq-plot, and thus conclude that the normality condition is satisfied.
