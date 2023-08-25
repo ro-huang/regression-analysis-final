@@ -1,5 +1,5 @@
 # Final project for Regression Analysis
-Final Project for STAT210 Regression Analysis with Yue Jiang. See project background [here](https://www2.stat.duke.edu/courses/Spring23/sta210.001/slides/individual.html). Submitted by professor recommendation to [USPROC Competition](https://www.causeweb.org/usproc/). 
+Final Project for STAT210 Regression Analysis. See project background [here](https://www2.stat.duke.edu/courses/Spring23/sta210.001/slides/individual.html). Submitted by professor recommendation to [USPROC Competition](https://www.causeweb.org/usproc/). 
 
 # Codebook 
 The following are some key variables included in our analysis:
