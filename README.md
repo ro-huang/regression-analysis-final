@@ -1,5 +1,5 @@
 # Final project for Regression Analysis
-Final Project for STAT210 Regression Analysis. See project background [here](https://www2.stat.duke.edu/courses/Spring23/sta210.001/slides/individual.html). Submitted by professor recommendation to [USPROC Competition](https://www.causeweb.org/usproc/). 
+Final Project for STAT210 Regression Analysis. Won 3rd Prize in the [USPROC](https://www.causeweb.org/usproc/) June 2023 Intermediate Statistics Class Project competition. The competition was sponsored by the American Statistical Association (ASA) and the Consortium for Advancement of Undergraduate Statistics Education (CAUSE). See project background [here].(https://www2.stat.duke.edu/courses/Spring23/sta210.001/slides/individual.html)
 
 # Codebook 
 The following are some key variables included in our analysis:
